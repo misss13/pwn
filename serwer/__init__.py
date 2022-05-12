@@ -1,1 +1,0 @@
-from serwer.handlers import all
