@@ -1,6 +1,6 @@
 import logging
 
-import json
+import os, sys, json
 from flask import abort, render_template_string
 
 import pwnagotchi.plugins as plugins
@@ -21,11 +21,22 @@ SITE_STRING = """
 {% endblock %}
 
 {% block content %}
+<button onclick="sendPost('uploader/test')">TEST</button>
+<button onclick="sendPost('http://10.0.0.1:12345')">TESTURL</button>
 <div>
     Got new handshake: {{handshake_flag}}
 </div>
-<button onclick="sendPost('test')">TEST</button>
-<button onclick="sendPost('http://127.0.0.1:80/test')">TESTURL</button>
+<div>
+    Handshake path: {{hs_path}}
+</div>
+<div>
+    Handshake count: {{hs_cnt}}
+</div>
+<div>
+    {% for path in hs_strings %}
+    <p>{{path}}</p>
+    {% endfor %}
+</div>
 {% endblock %}
 
 {% block script %}
@@ -37,6 +48,7 @@ function sendPost(url) {
     xobj.onreadystatechange = function () {
         if (xobj.readyState == 4) {
             console.log(xobj.status)
+            console.log("TODO: Dodać refresh")
         }
     }
     xobj.send("test")
@@ -51,21 +63,63 @@ class Uploader(plugins.Plugin):
     __license__ = 'GPL3'
     __description__ = 'An example plugin for pwnagotchi that implements all the available callbacks.'
 
-    new_hsh = False
-
     def __init__(self):
         logging.debug("example plugin created")
+        self.ready = False
+        self.new_hsh = False
+        self.hs_paths = []
+        self.ex_paths = []
+        self.new_paths = []
+
+    def on_config_changed(self, config):
+        self.config = config
+        self.ready = True
+        logging.warning("CONFIG CHANGED")
+        logging.info(self.config["bettercap"]["handshakes"])
 
     # called when http://<host>:<port>/plugins/<plugin>/ is called
     # must return a html page
     # IMPORTANT: If you use "POST"s, add a csrf-token (via csrf_token() and render_template_string)
     def on_webhook(self, path, request):
         if request.method == "GET":
-            return render_template_string(SITE_STRING, handshake_flag=self.new_hsh)
+
+            hs_dir = self.config["bettercap"]["handshakes"]
+            hs_fns = os.listdir(hs_dir)
+            self.hs_paths = [os.path.join(hs_dir, filename) for
+                    filename in hs_fns if filename.endswith(".pcap")]
+            with open(os.path.join(
+                    self.config["main"]["custom_plugins"],
+                    "uploader_exclude"
+                    )) as f:
+                self.ex_paths = f.readlines()
+            self.ex_paths = [x.rstrip() for x in self.ex_paths]
+
+            hs_cnt = len(self.hs_paths)
+            self.new_paths = list(
+                set(self.hs_paths) - set(self.ex_paths)
+                )
+
+            return render_template_string(
+                    SITE_STRING,
+                    handshake_flag=self.new_hsh,
+                    hs_path=self.config["bettercap"]["handshakes"],
+                    hs_cnt=hs_cnt,
+                    hs_strings=self.new_paths
+                    )
 
         elif request.method == "POST":
             if path == "test":
-                return "działa?"
+                f = open(os.path.join(
+                    self.config["main"]["custom_plugins"],
+                    "uploader_exclude"
+                    ),
+                    "w"
+                )
+                for path in self.hs_paths:
+                    f.write(path)
+                    f.write('\n')
+                f.close()
+                return "x"
             logging.info(str(request))
             logging.info(json.dumps(request))
             return "test"
