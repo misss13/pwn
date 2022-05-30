@@ -1,12 +1,17 @@
 import logging
 
-import os, sys, json
+import os, sys, json, socket, select, hashlib
 from flask import abort, render_template_string
+from flask import jsonify
 
 import pwnagotchi.plugins as plugins
 from pwnagotchi.ui.components import LabeledValue
 from pwnagotchi.ui.view import BLACK
 import pwnagotchi.ui.fonts as fonts
+
+
+IP = "10.0.0.1"
+PORT = 12345
 
 
 SITE_STRING = """
@@ -21,8 +26,11 @@ SITE_STRING = """
 {% endblock %}
 
 {% block content %}
-<button onclick="sendPost('uploader/test')">TEST</button>
-<button onclick="sendPost('http://10.0.0.1:12345')">TESTURL</button>
+<div class="ui-grid-b">
+    <button class="ui-block-a" onclick="sendPost('uploader/srv-hello')">Check Connection</button>
+    <button class="ui-block-b" onclick="sendPost('uploader/test-cmd', 'ssid')">Get Cracked SSIDs</button>
+    <button class="ui-block-c" onclick="sendPost('uploader/test')">Test</button>
+</div>
 <div>
     Got new handshake: {{handshake_flag}}
 </div>
@@ -30,7 +38,10 @@ SITE_STRING = """
     Handshake path: {{hs_path}}
 </div>
 <div>
-    Handshake count: {{hs_cnt}}
+    Total Handshake count: {{hs_cnt}}
+</div>
+<div>
+    Unsent Handshake count: {{new_hs_cnt}}
 </div>
 <div>
     {% for path in hs_strings %}
@@ -40,7 +51,7 @@ SITE_STRING = """
 {% endblock %}
 
 {% block script %}
-function sendPost(url) {
+function sendPost(url, msg="") {
     var xobj = new XMLHttpRequest()
     var csrf = "{{ csrf_token() }}"
     xobj.open("POST", url)
@@ -48,20 +59,31 @@ function sendPost(url) {
     xobj.onreadystatechange = function () {
         if (xobj.readyState == 4) {
             console.log(xobj.status)
+            try {
+                console.log(JSON.parse(xobj.response))
+            }
+            catch (error) {
+                console.error(error)
+                console.log(xobj.response)
+            }
             console.log("TODO: Dodać refresh")
         }
     }
-    xobj.send("test")
+    xobj.send(msg)
+}
+
+function jsonToTable(obj) {
+    
 }
 {% endblock %}
 """
 
 
 class Uploader(plugins.Plugin):
-    __author__ = 'evilsocket@gmail.com'
+    __author__ = 'Ta trójka z labów'
     __version__ = '1.0.0'
     __license__ = 'GPL3'
-    __description__ = 'An example plugin for pwnagotchi that implements all the available callbacks.'
+    __description__ = 'Does it matter if it does not work anyway?'
 
     def __init__(self):
         logging.debug("example plugin created")
@@ -98,17 +120,101 @@ class Uploader(plugins.Plugin):
             self.new_paths = list(
                 set(self.hs_paths) - set(self.ex_paths)
                 )
+            new_hs_cnt = len(self.new_paths)
 
             return render_template_string(
                     SITE_STRING,
                     handshake_flag=self.new_hsh,
                     hs_path=self.config["bettercap"]["handshakes"],
                     hs_cnt=hs_cnt,
-                    hs_strings=self.new_paths
+                    hs_strings=self.new_paths,
+                    new_hs_cnt=new_hs_cnt
                     )
 
         elif request.method == "POST":
-            if path == "test":
+            if path == "srv-hello":
+                ret_str = "DEFAULT"
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.connect((IP, PORT))
+                    sock.send("yoo".encode())
+                    rs, _, _ = select.select([sock], [], [])
+
+                    for cs in rs:
+                        reply = cs.recv(1024).decode().strip()
+                        logging.info(reply)
+                        cs.close()
+                        ret_str = reply
+                except Exception as e:
+                    logging.error(e)
+                    ret_str = e
+
+                return ret_str
+
+            elif path == "test-cmd":
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.connect((IP, PORT))
+                    sock.send(request.data)
+                    rs, _, _ = select.select([sock], [], [])
+
+                    for cs in rs:
+                        reply = cs.recv(1024).decode().replace("\0", "\n").strip()
+                        logging.info(reply)
+                        cs.close()
+                        kvp = [x.split("\t") for x in reply.split("\n")]
+                        dct = {y[0]: y[1] for y in kvp}
+                        ret_str = jsonify(dct)
+
+                except Exception as e:
+                    logging.error(e)
+                    ret_str = e
+
+                return ret_str
+
+
+            elif path == "test":
+                try:
+                    for path in self.new_paths:
+                        cli_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        cli_socket.connect((IP, PORT))
+                        cli_socket.setblocking(False)
+
+                        cli_socket.send("hs".encode())
+
+                        sha256 = hashlib.sha256()
+
+                        read_sockets, write_socket, error_socket = select.select([cli_socket], [], [])
+
+                        for socks in read_sockets:
+                            test = socks.recv(1024).decode().strip()
+                            logging.info(repr(test))
+
+                            with open(path, "rb") as f:
+                                for byte_block in iter(lambda: f.read(1024), b""):
+                                    sha256.update(byte_block)
+                                    
+                            cli_socket.send(str(sha256.hexdigest()).encode())
+
+                            read_sockets, write_socket, error_socket = select.select([cli_socket], [], [])
+
+                            for socks in read_sockets:
+                                test = socks.recv(1024).decode().strip()
+                                logging.info(repr(test))
+
+
+                                with open(path, "rb") as f:
+                                    bs = f.read(1024)
+                                    while (bs):
+                                        socks.send(bs)
+                                        bs = f.read(1024)
+                                    socks.close()
+
+                                socks.close()
+                        logging.info(f"Uploaded {path}")
+                except Exception as e:
+                    logging.error(e)
+
                 f = open(os.path.join(
                     self.config["main"]["custom_plugins"],
                     "uploader_exclude"
@@ -119,7 +225,10 @@ class Uploader(plugins.Plugin):
                     f.write(path)
                     f.write('\n')
                 f.close()
-                return "x"
+
+                return "zapisane"
+
+
             logging.info(str(request))
             logging.info(json.dumps(request))
             return "test"
