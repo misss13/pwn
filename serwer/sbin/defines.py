@@ -5,6 +5,9 @@ import socket
 import hashlib
 from sendfile import sendfile
 
+TODO_PCAP = [] #queue of files to handle
+STATUS_LAST = False #is recent file downloaded right
+KNOWN = { "kot":123, "pies":"123asd", "to":None} #ssid:passwd
 
 def start():
     """How to start"""
@@ -43,9 +46,44 @@ def sending(socket, message):
         return False
 
 
-def parsing(SSID, password):
-    """Parsing txt to format"""
-    return str(SSID) + ":" + str(password)
+def password_to_ugly(socket):
+    """Create string and send to client"""
+    global KNOWN
+    try:
+        table_string = ""
+        for ssid in list(KNOWN):
+            if KNOWN[ssid] != None:
+                table_string += str(str(ssid) + "\t" + str(KNOWN[ssid]) + "\n")
+                KNOWN.pop(ssid)
+                print(table_string)
+                print(KNOWN)
+        os.system("touch ssid-passwords.txt")
+        file = open("ssid-passwords.txt",'a')
+        file.write(table_string)
+        file.close()
+
+        #sending file hash
+        #fhash = hashlib.sha256()
+        #fhash.update(table_string.encode("UTF-8"))
+        #socket.sending(socket, fhash.hexdigest())
+
+        file = open("ssid-passwords.txt",'r')
+        
+        offset = 0
+        while True:
+            sent = sendfile(socket.fileno(), file.fileno(), offset, 1024)
+            if sent == 0:
+                break
+            offset += sent
+            print(offset)
+        file.close()
+        print("==sent==")
+        return True
+    except:
+        print("[ERROR] in password_to_ugly")
+        return False
+    
+
 
 def check_ssid():
     """Checking if rainbow table for ssid is aviale SSID.txt"""
@@ -97,21 +135,24 @@ def recv_file(file_name, socket):
         print("[ERROR] in recv_file function")
         return None
 
+def file_name_create(nr, folder, name):
+    """Create string for storing .pcap files"""
+    return str(str(folder) + "/" + str(name) + str(nr) + ".pcap")
 
 def client_hello(socket, address):
     """Define handling client connection"""
+    global TODO_PCAP
+    global STATUS_LAST
 
     r = reciving(socket) 
-    print(r)
+    print(">> " + r)
 
     if(str(r) == "yoo"):
-        #proste potwierdzenie że klient i serwer działa
+        #check health
         sending(socket, "oii")
-        socket.close()
 
     elif(str(r) == "ssid"):
-        #sending(socket, "ssid0\tpass0\nssid1\tpass1\nssid2\tpass2\n\0") 🤮🤮🤮🤮
-        socket.close()
+        password_to_ugly(socket)
 
     elif(str(r) == "hs"):
         #file receiving and integrity check
@@ -120,25 +161,33 @@ def client_hello(socket, address):
             thash = reciving(socket) 
             print(thash)
             sending(socket, "hash_ok")
-            fhash = recv_file("rcv.pcap", socket)
+            file_path = file_name_create(len(TODO_PCAP), "serwer/sbin/pcap", "rcv")
+            fhash = recv_file(file_path, socket)
+            file_hash = file_name_create("", "serwer/sbin/pcap", fhash)
             if fhash == thash:
                 print("yay")
-                status_last = True
+                STATUS_LAST = True
+                TODO_PCAP.append(fhash)
+                os.system("mv "+ file_path + " " + file_hash)
             else:
                 print("nay")
-                status_last = False
+                STATUS_LAST = False
         except:
             print("[ERROR] in Client_hello - hs")
-            status_last = False
-        socket.close()
+            STATUS_LAST = False
+        print(TODO_PCAP)
+        
 
     elif(str(r) == "status"):
-        status_last = True
-        if status_last:
-            sending(socket, "ok")
-        else:
-            sending(socket, "no")
-    
+        #status check
+        try:
+            if STATUS_LAST:
+                sending(socket, "ok")
+            else:
+                sending(socket, "no")
+        except:
+            print("[ERROR] in status")
+        
     else:
-        print("coś nie tak")
-        socket.close()
+        print("Request undefined")
+    socket.close()
