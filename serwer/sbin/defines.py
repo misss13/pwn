@@ -115,7 +115,6 @@ def client_hello(socket, address):
 
     elif(str(r) == "hs"):
         #file receiving and integrity check
-        fhash = None
         try:
             sending(socket, "ok")
             thash = reciving(socket) 
