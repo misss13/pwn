@@ -18,6 +18,10 @@ if __name__=="__main__":
         print("[ERROR]: " + str(e))
     ServerSocket.listen(CONNECTIONS)
 
+    #Thread handling cracking processess
+    main_thread = Main_handler(cracking_main_func)
+    main_thread.start()
+
     #client connect
     while True:
         socket, address = ServerSocket.accept()

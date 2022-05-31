@@ -1,13 +1,17 @@
 import os
 import sys
+import time
 import tqdm
 import socket
 import hashlib
 from sendfile import sendfile
 
+
 TODO_PCAP = [] #queue of files to handle
 STATUS_LAST = False #is recent file downloaded right
 KNOWN = { "kot":123, "pies":"123asd", "to":None} #ssid:passwd
+PCAP_DICT = {} # { hash_handshake:[ssid, bssid] }
+
 
 def start():
     """How to start"""
@@ -55,8 +59,6 @@ def password_to_ugly(socket):
             if KNOWN[ssid] != None:
                 table_string += str(str(ssid) + "\t" + str(KNOWN[ssid]) + "\n")
                 KNOWN.pop(ssid)
-                print(table_string)
-                print(KNOWN)
         os.system("touch ssid-passwords.txt")
         file = open("ssid-passwords.txt",'a')
         file.write(table_string)
@@ -75,18 +77,26 @@ def password_to_ugly(socket):
             if sent == 0:
                 break
             offset += sent
-            print(offset)
         file.close()
         print("==sent==")
         return True
     except:
         print("[ERROR] in password_to_ugly")
-        return False
-    
+        return False    
 
 
-def check_ssid():
+def check_ssid(ssid):
     """Checking if rainbow table for ssid is aviale SSID.txt"""
+    try:
+        with open('./serwer/manage/SSID.txt', 'r') as file:
+            if (str(ssid) in file.read()):
+                return True
+            return False
+
+    except:
+        print("[ERROR] in check_ssid")
+        return False
+
 
 def download_rainbow():
     """Connecting and downloading rainbow tables"""
@@ -94,8 +104,10 @@ def download_rainbow():
     #https://www.renderlab.net/projects/WPA-tables/ <- wybraned
     #chyba skipne bo to duże rzeczy są trzeba pobrać wcześniej
 
+
 def rainbow_tables_checking():
     """Use fast rainbow table"""
+    return "tajnehaslo"
 
 
 def check_dictionary():
@@ -104,10 +116,12 @@ def check_dictionary():
 
 def compute_aircrack_dictionary():
     """Aircrack checking on the run based on dictionary"""
+    return "tajnehaslo"
 
 
 def compute_cat_bruteforce():
     """Hashcat hashcat rainbow table bruteforcing"""
+    return "tajnehaslo"
 
 
 def send_end(ssid, password, socket):
@@ -117,6 +131,10 @@ def send_end(ssid, password, socket):
         socket.close()
         return True
 
+def get_bssid_ssid_hash(txt):
+    """Parse data and give strings"""
+    ssid, bssid, thash = txt.split("#")
+    return ssid, bssid, thash
 
 def recv_file(file_name, socket):
     """Reciving file function with returning hash"""
@@ -135,14 +153,17 @@ def recv_file(file_name, socket):
         print("[ERROR] in recv_file function")
         return None
 
+
 def file_name_create(nr, folder, name):
     """Create string for storing .pcap files"""
     return str(str(folder) + "/" + str(name) + str(nr) + ".pcap")
+
 
 def client_hello(socket, address):
     """Define handling client connection"""
     global TODO_PCAP
     global STATUS_LAST
+    global PCAP_DICT
 
     r = reciving(socket) 
     print(">> " + r)
@@ -152,13 +173,16 @@ def client_hello(socket, address):
         sending(socket, "oii")
 
     elif(str(r) == "ssid"):
+        #send client .txt of all known passwords 
+        #nie podoba mi się bo wysyłanie pliku to duża wartosc lepiej pojedynczo wysyłać hasła?
         password_to_ugly(socket)
 
     elif(str(r) == "hs"):
         #file receiving and integrity check
         try:
             sending(socket, "ok")
-            thash = reciving(socket) 
+            ssidbssidthash = reciving(socket)
+            ssid, bssid, thash = get_bssid_ssid_hash(ssidbssidthash)
             print(thash)
             sending(socket, "hash_ok")
             file_path = file_name_create(len(TODO_PCAP), "serwer/sbin/pcap", "rcv")
@@ -168,6 +192,9 @@ def client_hello(socket, address):
                 print("yay")
                 STATUS_LAST = True
                 TODO_PCAP.append(fhash)
+                PCAP_DICT[fhash] = [0,0]
+                PCAP_DICT[fhash][0] = ssid
+                PCAP_DICT[fhash][1] = bssid
                 os.system("mv "+ file_path + " " + file_hash)
             else:
                 print("nay")
@@ -177,7 +204,6 @@ def client_hello(socket, address):
             STATUS_LAST = False
         print(TODO_PCAP)
         
-
     elif(str(r) == "status"):
         #status check
         try:
@@ -191,3 +217,50 @@ def client_hello(socket, address):
     else:
         print("Request undefined")
     socket.close()
+
+
+#============ c r a c k i n g _ s e c t i o n ============#
+
+def phaze_123(ssid, active_handshake,bssid):
+    """3 phases for password receiving"""
+    #phaze 1. checking if password exist in downloaded rainbow table and using it
+    if check_ssid(ssid) == True:
+        download_rainbow()
+        password = rainbow_tables_checking()
+        return password
+    else:
+        print("Rainbow tables not aviable")
+
+    #phaze 2. realtime checking passwords from dictionary
+    password = compute_aircrack_dictionary()
+    if password != None:
+        print("Password found in dictionary")
+        return password
+    
+    #phaze 3. bruteforce with hashcat 
+    password = compute_cat_bruteforce()
+    print("Password bruteforced")
+    return password
+
+
+def cracking_main_func():
+    """Main function handling cracking"""
+    global TODO_PCAP
+    global PCAP_DICT
+    global KNOWN
+
+    while True:
+        if len(TODO_PCAP) == 0:
+            time.sleep(1)
+            print(".")
+        else:
+            active_handshake = TODO_PCAP[0]
+            ssid = PCAP_DICT[active_handshake][0]
+            bssid = PCAP_DICT[active_handshake][1]
+            
+            ##Main function
+            password = phaze_123(ssid, active_handshake, bssid)
+            KNOWN[ssid] = password
+            #removing item from queue
+            PCAP_DICT.pop(active_handshake)
+            TODO_PCAP.pop(0)

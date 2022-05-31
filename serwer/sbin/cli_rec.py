@@ -24,13 +24,14 @@ blocksize = os.path.getsize("wifi.pcap")
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect(("127.0.0.1", 12345))
 offset = 0
+################handshake###############
 sock.send(str("hs").encode("UTF-8"))
 
 rec = sock.recv(2048)
 rec = (str(rec.decode("UTF-8"))).replace("\0", "\n").replace("\n", "")
 print(rec)
 
-sock.send(str("b188eb2d279c5facabdb04822b4d32909c5af7d462d9043d5066e5c4134cc7d5").encode("UTF-8"))
+sock.send(str("SAGEMCOM9c#b6:54:9f:ca:e1#b188eb2d279c5facabdb04822b4d32909c5af7d462d9043d5066e5c4134cc7d5").encode("UTF-8")) #max 110 = 32+14+62
 
 rec = sock.recv(2048)
 rec = (str(rec.decode("UTF-8"))).replace("\0", "\n").replace("\n", "")
