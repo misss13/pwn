@@ -1,6 +1,9 @@
 import os
 import sys
+import tqdm
 import socket
+import hashlib
+from sendfile import sendfile
 
 
 def start():
@@ -77,34 +80,66 @@ def send_end(ssid, password, socket):
         return True
 
 
+def recv_file(file_name, socket):
+    """Reciving file function with returning hash"""
+    try:
+        fhash = hashlib.sha256()
+        file = open(file_name,'wb')
+        bs = socket.recv(1024)
+        while (bs):
+            file.write(bs)
+            fhash.update(bs)
+            bs = socket.recv(1024)
+        file.close()
+        print("===file-received===")
+        return(fhash.hexdigest())
+    except:
+        print("[ERROR] in recv_file function")
+        return None
+
+
 def client_hello(socket, address):
     """Define handling client connection"""
 
     r = reciving(socket) 
     print(r)
-    if(str(r) == "yoo"):
-    #proste potwierdzenie że klient i serwer działa
-        sending(socket, "oii")
-        print("send")
-        ssid = reciving(socket)
 
-        ##Main function
-        #phaze 1. checking if password exist in downloaded rainbow table and using it
-        if check_ssid(ssid) == True:
-            download_rainbow()
-            password = rainbow_tables_checking()
-            if send_end(ssid, password, socket) == True:
-                return True
-        
-        #phaze 2. realtime checking passwords from dictionary
-        password = compute_aircrack_dictionary(ssid)
-        if send_end(ssid, password, socket) == True:
-            return True
-        
-        #phaze 3. bruteforce with hashcat
-        password = compute_aircrack_dictionary(ssid)
-        if send_end(ssid, password, socket) == True:
-            return True
+    if(str(r) == "yoo"):
+        #proste potwierdzenie że klient i serwer działa
+        sending(socket, "oii")
+        socket.close()
+
+    elif(str(r) == "ssid"):
+        #sending(socket, "ssid0\tpass0\nssid1\tpass1\nssid2\tpass2\n\0") 🤮🤮🤮🤮
+        socket.close()
+
+    elif(str(r) == "hs"):
+        #file receiving and integrity check
+        fhash = None
+        try:
+            sending(socket, "ok")
+            thash = reciving(socket) 
+            print(thash)
+            sending(socket, "hash_ok")
+            fhash = recv_file("rcv.pcap", socket)
+            if fhash == thash:
+                print("yay")
+                status_last = True
+            else:
+                print("nay")
+                status_last = False
+        except:
+            print("[ERROR] in Client_hello - hs")
+            status_last = False
+        socket.close()
+
+    elif(str(r) == "status"):
+        status_last = True
+        if status_last:
+            sending(socket, "ok")
+        else:
+            sending(socket, "no")
+    
     else:
-        #os.system("echo yooo")
+        print("coś nie tak")
         socket.close()
