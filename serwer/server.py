@@ -2,8 +2,7 @@ import time
 import socket
 from sbin import *
 
-#imagine more than 3 connections with running hashcat
-CONNECTIONS=3
+CONNECTIONS=5
 
 if __name__=="__main__":
     host, port = start()

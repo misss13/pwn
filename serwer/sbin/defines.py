@@ -114,9 +114,20 @@ def check_dictionary():
     """Check if dictionary.txt exist"""
 
 
-def compute_aircrack_dictionary():
-    """Aircrack checking on the run based on dictionary"""
-    return "tajnehaslo"
+def compute_aircrack_dictionary(bssid, active_handshake):
+    """Aircrack checking on the run, based on dictionary"""
+    try:
+        os.system("echo '' > ./manage/active_password")
+        os.system("aircrack-ng -w ./serwer/manage/dictionary.txt -b " + str(bssid) + " ./serwer/sbin/pcap/" + str(active_handshake) + ".pcap -l ./serwer/manage/active_password")
+        with open('./serwer/manage/active_password', 'r') as file:
+            passw = file.read().rstrip()
+        if passw == "":
+            return None
+        else:
+            return passw
+    except:
+        print("[ERROR] in compute_aircrack_dictionary")
+        return None
 
 
 def compute_cat_bruteforce():
@@ -232,7 +243,7 @@ def phaze_123(ssid, active_handshake,bssid):
         print("Rainbow tables not aviable")
 
     #phaze 2. realtime checking passwords from dictionary
-    password = compute_aircrack_dictionary()
+    password = compute_aircrack_dictionary(bssid, active_handshake)
     if password != None:
         print("Password found in dictionary")
         return password
