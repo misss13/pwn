@@ -1,6 +1,7 @@
 import logging
 
 import os, sys, json, socket, select, hashlib
+from textwrap import wrap
 from flask import abort, render_template_string
 from flask import jsonify
 
@@ -32,9 +33,6 @@ SITE_STRING = """
     <button class="ui-block-c" onclick="sendPost('uploader/test')">Test</button>
 </div>
 <div>
-    Got new handshake: {{handshake_flag}}
-</div>
-<div>
     Handshake path: {{hs_path}}
 </div>
 <div>
@@ -44,8 +42,16 @@ SITE_STRING = """
     Unsent Handshake count: {{new_hs_cnt}}
 </div>
 <div>
+    APs on list: {{ap_cnt}}
+</div>
+<div>
     {% for path in hs_strings %}
     <p>{{path}}</p>
+    {% endfor %}
+</div>
+<div>
+    {% for bssid,ssid in ap_list.items() %}
+    <p>{{bssid}} : {{ssid}}</p>
     {% endfor %}
 </div>
 {% endblock %}
@@ -87,8 +93,8 @@ class Uploader(plugins.Plugin):
 
     def __init__(self):
         logging.debug("example plugin created")
+        self.ap_index = {"96:0a:c6:3a:97:60": "LBK_AP"}
         self.ready = False
-        self.new_hsh = False
         self.hs_paths = []
         self.ex_paths = []
         self.new_paths = []
@@ -104,8 +110,8 @@ class Uploader(plugins.Plugin):
     # IMPORTANT: If you use "POST"s, add a csrf-token (via csrf_token() and render_template_string)
     def on_webhook(self, path, request):
         if request.method == "GET":
-
             hs_dir = self.config["bettercap"]["handshakes"]
+            # handshake filenames
             hs_fns = os.listdir(hs_dir)
             self.hs_paths = [os.path.join(hs_dir, filename) for
                     filename in hs_fns if filename.endswith(".pcap")]
@@ -124,11 +130,12 @@ class Uploader(plugins.Plugin):
 
             return render_template_string(
                     SITE_STRING,
-                    handshake_flag=self.new_hsh,
                     hs_path=self.config["bettercap"]["handshakes"],
                     hs_cnt=hs_cnt,
                     hs_strings=self.new_paths,
-                    new_hs_cnt=new_hs_cnt
+                    new_hs_cnt=new_hs_cnt,
+                    ap_list=self.ap_index,
+                    ap_cnt=len(self.ap_index.items())
                     )
 
         elif request.method == "POST":
@@ -180,37 +187,45 @@ class Uploader(plugins.Plugin):
                         cli_socket.connect((IP, PORT))
                         cli_socket.setblocking(False)
 
+                        hsmac = ":".join(wrap(path.split("_")[1].split(".")[0], 2))
+                        logging.info(f"hsmac= {hsmac}")
+
+                        if hsmac not in self.ap_index.keys():
+                            logging.error(f"{hsmac} not in ap_index")
+                            continue
+
                         cli_socket.send("hs".encode())
 
                         sha256 = hashlib.sha256()
 
-                        read_sockets, write_socket, error_socket = select.select([cli_socket], [], [])
+                        read_sockets, _, _ = select.select([cli_socket], [], [])
 
                         for socks in read_sockets:
                             test = socks.recv(1024).decode().strip()
                             logging.info(repr(test))
 
-                            with open(path, "rb") as f:
-                                for byte_block in iter(lambda: f.read(1024), b""):
-                                    sha256.update(byte_block)
-                                    
-                            cli_socket.send(str(sha256.hexdigest()).encode())
+                            f = open(path, "rb")
 
-                            read_sockets, write_socket, error_socket = select.select([cli_socket], [], [])
+                            for byte_block in iter(lambda: f.read(1024), b""):
+                                sha256.update(byte_block)
+
+                            f.close()
+                            f = open(path, "rb")
+                                    
+                            cli_socket.send(f"{hsmac}#{self.ap_index[hsmac]}#{sha256.hexdigest()}".encode())
+
+                            read_sockets, _, _ = select.select([cli_socket], [], [])
 
                             for socks in read_sockets:
                                 test = socks.recv(1024).decode().strip()
                                 logging.info(repr(test))
 
-
-                                with open(path, "rb") as f:
+                                bs = f.read(1024)
+                                while (bs):
+                                    socks.send(bs)
                                     bs = f.read(1024)
-                                    while (bs):
-                                        socks.send(bs)
-                                        bs = f.read(1024)
-                                    socks.close()
-
                                 socks.close()
+
                         logging.info(f"Uploaded {path}")
                 except Exception as e:
                     logging.error(e)
@@ -237,15 +252,10 @@ class Uploader(plugins.Plugin):
 
     # called when the plugin is loaded
     def on_loaded(self):
-        logging.warning("WARNING: this plugin should be disabled! options = " % self.options)
-
-    # called before the plugin is unloaded
-    def on_unload(self, ui):
-        pass
+        logging.warning("WARNING: this plugin is very bad!")
 
     # called when there's internet connectivity
     def on_internet_available(self, agent):
-
         pass
 
     # called to setup the ui elements
@@ -260,10 +270,6 @@ class Uploader(plugins.Plugin):
         #ui.set('uploader_status', "DEAD")
         pass
 
-    # called when the hardware display setup is done, display is an hardware specific object
-    def on_display_setup(self, display):
-        pass
-
     # called when everything is ready and the main loop is about to start
     def on_ready(self, agent):
         logging.info("unit is ready")
@@ -272,48 +278,12 @@ class Uploader(plugins.Plugin):
         # or set a custom state
         #   agent.set_bored()
 
-    # called when a non overlapping wifi channel is found to be free
-    def on_free_channel(self, agent, channel):
-        pass
-
-    # called when the agent refreshed its access points list
-    def on_wifi_update(self, agent, access_points):
-        pass
-
-    # called when the agent refreshed an unfiltered access point list
-    # this list contains all access points that were detected BEFORE filtering
-    def on_unfiltered_ap_list(self, agent, access_points):
-        pass
-
-    # called when the agent is sending an association frame
-    def on_association(self, agent, access_point):
-        pass
-
-    # called when the agent is deauthenticating a client station from an AP
-    def on_deauthentication(self, agent, access_point, client_station):
-        pass
-
-    # callend when the agent is tuning on a specific channel
-    def on_channel_hop(self, agent, channel):
-        pass
-
     # called when a new handshake is captured, access_point and client_station are json objects
     # if the agent could match the BSSIDs to the current list, otherwise they are just the strings of the BSSIDs
     def on_handshake(self, agent, filename, access_point, client_station):
-        self.new_hsh = True
         logging.info(filename)
         logging.info(json.dumps(access_point))
-        logging.info(json.dumps(client_station))
+        self.ap_index[str(access_point.mac)] = str(access_point.hostname)
+        logging.info(len(self.ap_index.items()))
         pass
 
-    # called when an epoch is over (where an epoch is a single loop of the main algorithm)
-    def on_epoch(self, agent, epoch, epoch_data):
-        pass
-
-    # called when a new peer is detected
-    def on_peer_detected(self, agent, peer):
-        pass
-
-    # called when a known peer is lost
-    def on_peer_lost(self, agent, peer):
-        pass
