@@ -13,7 +13,6 @@ STATUS_LAST = False #is recent file downloaded right
 KNOWN = { "kot":123, "pies":"123asd", "to":None} #ssid:passwd
 PCAP_DICT = {} # { hash_handshake:[ssid, bssid] }
 
-
 def start():
     """How to start"""
     if len(sys.argv) < 2:
@@ -50,7 +49,7 @@ def sending(socket, message):
         print("[ERROR] in sending")
         return False
 
-
+      
 def password_to_ugly(socket):
     """Create string and send to client"""
     global KNOWN
@@ -175,6 +174,7 @@ def send_end(ssid, password, socket):
         socket.close()
         return True
 
+      
 def get_bssid_ssid_hash(txt):
     """Parse data and give strings"""
     ssid, bssid, thash = txt.split("\t")
