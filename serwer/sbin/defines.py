@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import tqdm
@@ -273,7 +274,7 @@ def phaze_123(ssid, active_handshake,bssid):
         password = rainbow_tables_checking(bssid, active_handshake)
         return password
     else:
-        print("Rainbow tables not aviable")
+        print("Rainbow tables not available")
 
     #phaze 2. realtime checking passwords from dictionary
     if check_dictionary() == True:
