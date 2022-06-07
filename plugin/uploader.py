@@ -1,9 +1,8 @@
 import logging
 
-import os, sys, json, socket, select, hashlib
+import os, sys, json, socket, select, hashlib, time
 from textwrap import wrap
-from flask import abort, render_template_string
-from flask import jsonify
+from flask import abort, render_template_string, jsonify
 
 import pwnagotchi.plugins as plugins
 from pwnagotchi.ui.components import LabeledValue
@@ -93,7 +92,8 @@ class Uploader(plugins.Plugin):
 
     def __init__(self):
         logging.debug("example plugin created")
-        self.ap_index = {"96:0a:c6:3a:97:60": "LBK_AP"}
+        # Wstawić ten z RainbowTable na koniec btw
+        self.ap_index = {"96:0a:c6:3a:97:60": "LBK_AP", "7c:03:d8:2d:e0:a9": "Caffe_late"}
         self.ready = False
         self.hs_paths = []
         self.ex_paths = []
@@ -212,7 +212,7 @@ class Uploader(plugins.Plugin):
                                 for byte_block in iter(lambda: f.read(1024), b""):
                                     sha256.update(byte_block)
                                     
-                            cs.send(f"{hsmac}\t{self.ap_index[hsmac]}\t{sha256.hexdigest()}".encode())
+                            cs.send(f"{self.ap_index[hsmac]}\t{hsmac}\t{sha256.hexdigest()}".encode())
 
                             rs, _, _ = select.select([cli_socket], [], [])
 
@@ -226,6 +226,10 @@ class Uploader(plugins.Plugin):
                                         cs.send(bs)
                                         bs = f.read(1024)
                                     cs.close()
+
+                        # WAŻNY TEN SLEEP
+                        time.sleep(1)
+                        
 
                         logging.info(f"Uploaded {path}")
                 except Exception as e:
