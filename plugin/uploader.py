@@ -27,11 +27,13 @@ SITE_STRING = """
 {% endblock %}
 
 {% block content %}
-<div class="ui-grid-b">
-    <button class="ui-block-a" onclick="sendPost('uploader/srv-hello')">Check Connection</button>
-    <button class="ui-block-b" onclick="sendPost('uploader/test-cmd', 'ssid')">Get Cracked SSIDs</button>
-    <button class="ui-block-c" onclick="sendPost('uploader/test')">Test</button>
+<ul>
+<div class="ui-grid ui-grid-b">
+    <button class="ui-btn ui-block-a ui-icon-search  ui-btn-icon-left" onclick="sendPost('uploader/srv-hello')">Check Connection</button>
+    <button class="ui-btn ui-block-b ui-icon-arrow-d ui-btn-icon-left" onclick="sendPost('uploader/ssid-pass')">Get Cracked SSIDs</button>
+    <button class="ui-btn ui-block-c ui-icon-arrow-u ui-btn-icon-left" onclick="sendPost('uploader/upload-hs')">Upload Handshakes</button>
 </div>
+</ul>
 <div>
     Handshake path: {{hs_path}}
 </div>
@@ -57,7 +59,7 @@ SITE_STRING = """
 {% endblock %}
 
 {% block script %}
-function sendPost(url, msg="") {
+function sendPost(url) {
     var xobj = new XMLHttpRequest()
     var csrf = "{{ csrf_token() }}"
     xobj.open("POST", url)
@@ -69,16 +71,14 @@ function sendPost(url, msg="") {
                 console.log(JSON.parse(xobj.response))
             }
             catch (error) {
-                console.error(error)
                 console.log(xobj.response)
             }
-            console.log("TODO: Dodać refresh")
         }
     }
-    xobj.send(msg)
+    xobj.send()
 }
 
-function jsonToTable(obj) {
+function ssidPassTable(obj) {
     
 }
 {% endblock %}
@@ -158,29 +158,33 @@ class Uploader(plugins.Plugin):
 
                 return ret_str
 
-            elif path == "test-cmd":
+            elif path == "ssid-pass":
                 try:
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.connect((IP, PORT))
-                    sock.send(request.data)
+                    logging.info("connected")
+                    sock.send("ssid".encode())
+                    logging.info("sent")
                     rs, _, _ = select.select([sock], [], [])
+                    logging.info("read ready")
 
                     for cs in rs:
-                        reply = cs.recv(1024).decode().replace("\0", "\n").strip()
+                        reply = cs.recv(1024).decode().replace("\0", "\n").rstrip()
                         logging.info(reply)
                         cs.close()
+                        logging.info("sock closed")
                         kvp = [x.split("\t") for x in reply.split("\n")]
                         dct = {y[0]: y[1] for y in kvp}
                         ret_str = jsonify(dct)
 
                 except Exception as e:
                     logging.error(e)
-                    ret_str = e
+                    ret_str = str(e)
 
                 return ret_str
 
 
-            elif path == "test":
+            elif path == "upload-hs":
                 try:
                     for path in self.new_paths:
                         cli_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -198,33 +202,30 @@ class Uploader(plugins.Plugin):
 
                         sha256 = hashlib.sha256()
 
-                        read_sockets, _, _ = select.select([cli_socket], [], [])
+                        rs, _, _ = select.select([cli_socket], [], [])
 
-                        for socks in read_sockets:
-                            test = socks.recv(1024).decode().strip()
-                            logging.info(repr(test))
+                        for cs in rs:
+                            reply = cs.recv(1024).decode().strip()
+                            logging.info(repr(reply))
 
-                            f = open(path, "rb")
-
-                            for byte_block in iter(lambda: f.read(1024), b""):
-                                sha256.update(byte_block)
-
-                            f.close()
-                            f = open(path, "rb")
+                            with open(path, "rb") as f:
+                                for byte_block in iter(lambda: f.read(1024), b""):
+                                    sha256.update(byte_block)
                                     
-                            cli_socket.send(f"{hsmac}#{self.ap_index[hsmac]}#{sha256.hexdigest()}".encode())
+                            cs.send(f"{hsmac}\t{self.ap_index[hsmac]}\t{sha256.hexdigest()}".encode())
 
-                            read_sockets, _, _ = select.select([cli_socket], [], [])
+                            rs, _, _ = select.select([cli_socket], [], [])
 
-                            for socks in read_sockets:
-                                test = socks.recv(1024).decode().strip()
-                                logging.info(repr(test))
+                            for cs in rs:
+                                reply = cs.recv(1024).decode().strip()
+                                logging.info(repr(reply))
 
-                                bs = f.read(1024)
-                                while (bs):
-                                    socks.send(bs)
+                                with open(path, "rb") as f:
                                     bs = f.read(1024)
-                                socks.close()
+                                    while (bs):
+                                        cs.send(bs)
+                                        bs = f.read(1024)
+                                    cs.close()
 
                         logging.info(f"Uploaded {path}")
                 except Exception as e:
