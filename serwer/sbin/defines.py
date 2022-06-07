@@ -284,7 +284,7 @@ def phaze_123(ssid, active_handshake,bssid):
             return password
     
     #phaze 3. bruteforce with hashcat 
-    password = compute_cat_bruteforce(bssid, active_handshake)
+    password = compute_cat_bruteforce(active_handshake)
     if password == None:
         print("Password not bruteforced")
     else:
