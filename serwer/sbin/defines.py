@@ -152,8 +152,8 @@ def compute_aircrack_dictionary(bssid, active_handshake):
 def compute_cat_bruteforce(active_handshake):
     """Hashcat hashcat rainbow table bruteforcing"""
     try:
-        os.system("echo '' > ./manage/active_password_h")
-        os.system("echo '' > ./manage/active_password_h1")
+        os.system("echo '' > ./serwer/manage/active_password_h")
+        os.system("echo '' > ./serwer/manage/active_password_h1")
         os.system("hcxpcapngtool -o ./serwer/manage/actual.hc22000 -E ./serwer/manage/wordlist ./serwer/sbin/pcap || echo '[ERROR] NO 4th part of EAPOL message'" + str(active_handshake) + ".pcap")
         os.system("hashcat -m 22000 ./serwer/manage/actual.hc22000 -a 3 '?d?d?d?d?d?d?d?d' -o ./serwer/manage/active_password_h")
         os.system("cat ./serwer/manage/active_password_h | cut -d: -f5 | head -n 1 > ./serwer/manage/active_password_h1")
