@@ -107,12 +107,12 @@ def check_rainbow():
     #UWAGA!!!! Prosze pobrac tara 7GB i rozpakować wszystkie .hash sciezka w 7gb_set/*.hash
     return exists("./serwer/manage/7gb_set/")
 
-def rainbow_tables_checking(bssid, active_handshake):
+def rainbow_tables_checking(ssid, active_handshake):
     """Use fast rainbow table coWPAtty cuz its not fast as wind - not working most time -.-"""
     try:
         os.system("echo '' > ./serwer/manage/cowpatty_out")
         os.system("echo '' > ./serwer/manage/active_password_cow")
-        os.system("cowpatty -f ./serwer/manage/7gb_set/" + str(bssid) + ".hash -s " + str(bssid) + " -r ./serwer/sbin/pcap/" + str(active_handshake) + ".pcap > ./serwer/manage/cowpatty_out")
+        os.system("cowpatty -f ./serwer/manage/7gb_set/" + str(ssid) + ".hash -s " + str(ssid) + " -r ./serwer/sbin/pcap/" + str(active_handshake) + ".pcap > ./serwer/manage/cowpatty_out")
         os.system("cat ./serwer/manage/cowpatty_out | grep \'The PSK is\' > ./serwer/manage/active_password_cow")
         with open('./serwer/manage/active_password', 'r') as file:
             passw = file.read().rstrip()
@@ -154,8 +154,8 @@ def compute_cat_bruteforce(active_handshake):
     try:
         os.system("echo '' > ./serwer/manage/active_password_h")
         os.system("echo '' > ./serwer/manage/active_password_h1")
-        os.system("hcxpcapngtool -o ./serwer/manage/actual.hc22000 -E ./serwer/manage/wordlist ./serwer/sbin/pcap || echo '[ERROR] NO 4th part of EAPOL message'" + str(active_handshake) + ".pcap")
-        os.system("hashcat -m 22000 ./serwer/manage/actual.hc22000 -a 3 '?d?d?d?d?d?d?d?d' -o ./serwer/manage/active_password_h")
+        os.system("hcxpcapngtool -o ./serwer/manage/actual.hc22000 -E ./serwer/manage/wordlist ./serwer/sbin/pcap/" + str(active_handshake) + ".pcap")
+        os.system("hashcat -m 22000 ./serwer/manage/actual.hc22000 -a 3 '?d' -o ./serwer/manage/active_password_h")
         os.system("cat ./serwer/manage/active_password_h | cut -d: -f5 | head -n 1 > ./serwer/manage/active_password_h1")
         with open('./serwer/manage/active_password', 'r') as file:
             passw = file.read().rstrip()
@@ -271,7 +271,7 @@ def phaze_123(ssid, active_handshake,bssid):
     #phaze 1. checking if password exist in downloaded rainbow table and using it
     if check_ssid(ssid) == True and check_rainbow() == True:
         download_rainbow()
-        password = rainbow_tables_checking(bssid, active_handshake)
+        password = rainbow_tables_checking(ssid, active_handshake)
         return password
     else:
         print("Rainbow tables not available")
