@@ -270,7 +270,7 @@ def phaze_123(ssid, active_handshake,bssid):
     #phaze 1. checking if password exist in downloaded rainbow table and using it
     if check_ssid(ssid) == True and check_rainbow() == True:
         download_rainbow()
-        password = rainbow_tables_checking()
+        password = rainbow_tables_checking(bssid, active_handshake)
         return password
     else:
         print("Rainbow tables not aviable")
@@ -283,8 +283,11 @@ def phaze_123(ssid, active_handshake,bssid):
             return password
     
     #phaze 3. bruteforce with hashcat 
-    password = compute_cat_bruteforce()
-    print("Password bruteforced")
+    password = compute_cat_bruteforce(bssid, active_handshake)
+    if password == None:
+        print("Password not bruteforced")
+    else:
+        print("Password bruteforced")
     return password
 
 
