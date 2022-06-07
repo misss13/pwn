@@ -26,13 +26,17 @@ SITE_STRING = """
 {% endblock %}
 
 {% block content %}
-<ul>
 <div class="ui-grid ui-grid-b">
-    <button class="ui-btn ui-block-a ui-icon-search  ui-btn-icon-left" onclick="sendPost('uploader/srv-hello')">Check Connection</button>
-    <button class="ui-btn ui-block-b ui-icon-arrow-d ui-btn-icon-left" onclick="sendPost('uploader/ssid-pass')">Get Cracked SSIDs</button>
-    <button class="ui-btn ui-block-c ui-icon-arrow-u ui-btn-icon-left" onclick="sendPost('uploader/upload-hs')">Upload Handshakes</button>
+    <div class="ui-block-a">
+        <button class="ui-btn ui-icon-search  ui-btn-icon-left" onclick="sendPost('uploader/srv-hello')">Check Connection</button>
+    </div>
+    <div class="ui-block-b">
+        <button class="ui-btn ui-icon-arrow-d ui-btn-icon-left" onclick="sendPost('uploader/ssid-pass')">Get Cracked SSIDs</button>
+    </div>
+    <div class="ui-block-c">
+        <button class="ui-btn ui-icon-arrow-u ui-btn-icon-left" onclick="sendPost('uploader/upload-hs')">Upload Handshakes</button>
+    </div>
 </div>
-</ul>
 <div>
     Handshake path: {{hs_path}}
 </div>
