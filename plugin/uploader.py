@@ -1,6 +1,12 @@
 import logging
 
-import os, sys, json, socket, select, hashlib, time
+import os
+import sys
+import json
+import socket
+import select
+import hashlib
+import time
 from textwrap import wrap
 from flask import abort, render_template_string, jsonify
 
@@ -174,7 +180,6 @@ function sendPost(url) {
             }
             else if (url == "uploader/ssid-pass") {
                 if (xobj.status == 200) {
-
                     try {
                         ssid_json = JSON.parse(xobj.response)
                         $("#crack").empty()
@@ -189,7 +194,11 @@ function sendPost(url) {
                 }
             }
             else if (url == "uploader/upload-hs") {
-                
+                if (xobj.status == 200) {
+                    setTimeout(() => {
+                        location.reload()
+                    }, 5000)
+                }
             }
             
             clearTimeout(timeout);
@@ -226,7 +235,8 @@ class Uploader(plugins.Plugin):
     def __init__(self):
         logging.debug("example plugin created")
         # Wstawić ten z RainbowTable na koniec btw
-        self.ap_index = {"96:0a:c6:3a:97:60": "LBK_AP", "7c:03:d8:2d:e0:a9": "Caffe_late"}
+        self.ap_index = {"96:0a:c6:3a:97:60": "LBK_AP",
+                         "7c:03:d8:2d:e0:a9": "Caffe_late"}
         self.ready = False
         self.hs_paths = []
         self.ex_paths = []
@@ -247,28 +257,28 @@ class Uploader(plugins.Plugin):
             # handshake filenames
             hs_fns = os.listdir(hs_dir)
             self.hs_paths = [os.path.join(hs_dir, filename) for
-                    filename in hs_fns if filename.endswith(".pcap")]
+                             filename in hs_fns if filename.endswith(".pcap")]
             with open(os.path.join(
                     self.config["main"]["custom_plugins"],
                     "uploader_exclude"
-                    )) as f:
+            )) as f:
                 self.ex_paths = f.readlines()
             self.ex_paths = [x.rstrip() for x in self.ex_paths]
 
             hs_cnt = len(self.hs_paths)
             self.new_paths = list(
                 set(self.hs_paths) - set(self.ex_paths)
-                )
+            )
             new_hs_cnt = len(self.new_paths)
 
             return render_template_string(
-                    SITE_STRING,
-                    hs_cnt=hs_cnt,
-                    hs_strings=self.new_paths,
-                    new_hs_cnt=new_hs_cnt,
-                    ap_list=self.ap_index,
-                    ap_cnt=len(self.ap_index.items())
-                    )
+                SITE_STRING,
+                hs_cnt=hs_cnt,
+                hs_strings=self.new_paths,
+                new_hs_cnt=new_hs_cnt,
+                ap_list=self.ap_index,
+                ap_cnt=len(self.ap_index.items())
+            )
 
         elif request.method == "POST":
             if path == "srv-hello":
@@ -298,7 +308,8 @@ class Uploader(plugins.Plugin):
                     logging.info("read ready")
 
                     for cs in rs:
-                        reply = cs.recv(1024).decode().replace("\0", "\n").rstrip()
+                        reply = cs.recv(1024).decode().replace(
+                            "\0", "\n").rstrip()
                         logging.info(reply)
                         cs.close()
                         logging.info("sock closed")
@@ -309,15 +320,19 @@ class Uploader(plugins.Plugin):
                     logging.error(e)
                     return str(e), 500
 
-
             elif path == "upload-hs":
-                try:
-                    for path in self.new_paths:
-                        cli_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                to_exclude = self.ex_paths
+                ex_ctr = 0
+
+                for hs_path in self.new_paths:
+                    try:
+                        cli_socket = socket.socket(
+                            socket.AF_INET, socket.SOCK_STREAM)
                         cli_socket.connect((IP, PORT))
                         cli_socket.setblocking(False)
 
-                        hsmac = ":".join(wrap(path.split("_")[1].split(".")[0], 2))
+                        hsmac = ":".join(
+                            wrap(hs_path.split("_")[1].split(".")[0], 2))
                         logging.info(f"hsmac= {hsmac}")
 
                         if hsmac not in self.ap_index.keys():
@@ -334,11 +349,12 @@ class Uploader(plugins.Plugin):
                             reply = cs.recv(1024).decode().strip()
                             logging.info(repr(reply))
 
-                            with open(path, "rb") as f:
+                            with open(hs_path, "rb") as f:
                                 for byte_block in iter(lambda: f.read(1024), b""):
                                     sha256.update(byte_block)
-                                    
-                            cs.send(f"{self.ap_index[hsmac]}\t{hsmac}\t{sha256.hexdigest()}".encode())
+
+                            cs.send(
+                                f"{self.ap_index[hsmac]}\t{hsmac}\t{sha256.hexdigest()}".encode())
 
                             rs, _, _ = select.select([cli_socket], [], [])
 
@@ -346,39 +362,74 @@ class Uploader(plugins.Plugin):
                                 reply = cs.recv(1024).decode().strip()
                                 logging.info(repr(reply))
 
-                                with open(path, "rb") as f:
+                                with open(hs_path, "rb") as f:
                                     bs = f.read(1024)
                                     while (bs):
                                         cs.send(bs)
                                         bs = f.read(1024)
                                     cs.close()
 
+                        cli_socket.close()
+
                         # WAŻNY TEN SLEEP
                         time.sleep(1)
-                        
 
-                        logging.info(f"Uploaded {path}")
-                except Exception as e:
-                    logging.error(e)
+                        try:
+                            cli_socket = socket.socket(
+                                socket.AF_INET, socket.SOCK_STREAM)
+                            cli_socket.connect((IP, PORT))
+                            cli_socket.setblocking(False)
+
+                            cli_socket.send("status".encode())
+
+                            rs, _, _ = select.select([cli_socket], [], [])
+
+                            for cs in rs:
+                                reply = cs.recv(1024).decode().strip()
+
+                                if reply == "ok":
+                                    logging.info(f"Uploaded {hs_path}")
+                                    to_exclude.append(hs_path)
+                                    ex_ctr += 1
+                                else:
+                                    logging.error(
+                                        f"Failed to upload {hs_path}")
+
+                                cs.close()
+
+                        except Exception as e:
+                            logging.error(e)
+
+                    except Exception as e:
+                        logging.error(e)
+
+                    cli_socket.close()
+
+                    # WAŻNY TEN SLEEP
+                    time.sleep(1)
 
                 f = open(os.path.join(
                     self.config["main"]["custom_plugins"],
                     "uploader_exclude"
-                    ),
+                ),
                     "w"
                 )
-                for path in self.hs_paths:
-                    f.write(path)
+                for hs_path in to_exclude:
+                    f.write(hs_path)
                     f.write('\n')
                 f.close()
 
-                return "zapisane", 200
+                if ex_ctr == 0:
+                    logging.error("failed to send")
+                    return "failed to send", 500
 
+                logging.info("zapisane")
+                return "zapisane", 200
 
             logging.info(str(request))
             logging.info(json.dumps(request))
             return "test", 418
-        
+
         return "bad request", 400
 
     # called when the plugin is loaded
@@ -392,13 +443,13 @@ class Uploader(plugins.Plugin):
     # called to setup the ui elements
     def on_ui_setup(self, ui):
         # add custom UI elements
-        ui.add_element('upls', LabeledValue(color=BLACK, label='UPStat: ', value='INIT', position=(ui.width() / 2 - 30, 0),
-                                           label_font=fonts.Bold, text_font=fonts.Medium))
+        ui.add_element('upls', LabeledValue(color=BLACK, label='AP ready: ', value='0', position=(ui.width() / 2 - 30, 0),
+                                            label_font=fonts.Bold, text_font=fonts.Medium))
 
     # called when the ui is updated
     def on_ui_update(self, ui):
         # update those elements
-        #ui.set('uploader_status', "DEAD")
+        ui.set('upls', str(len(self.ap_index)))
         pass
 
     # called when everything is ready and the main loop is about to start
@@ -417,4 +468,3 @@ class Uploader(plugins.Plugin):
         self.ap_index[str(access_point.mac)] = str(access_point.hostname)
         logging.info(len(self.ap_index.items()))
         pass
-
