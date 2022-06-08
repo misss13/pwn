@@ -23,41 +23,106 @@ SITE_STRING = """
 
 {% block styles %}
 {{ super() }}
+
+<style>
+    .ui-box {
+        padding: 0.5rem;
+        background-color: rgb(233, 233, 233);
+        border: 1px solid rgb(221, 221, 221);
+        text-align: center;
+        box-sizing: border-box;
+    }
+    .no-margin {
+        margin-bottom: 0 !important;
+    }
+    table {
+        border-collapse: collapse;
+        border: 1px solid rgb(221, 221, 221);
+    }
+    table td,th {
+        padding: 0.5rem;
+        text-align: center;
+        border-collapse: collapse;
+        border: 1px solid rgb(221, 221, 221);
+        background-color: rgb(246, 246, 246);
+    }
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="ui-grid ui-grid-b">
     <div class="ui-block-a">
-        <button class="ui-btn ui-icon-search  ui-btn-icon-left" onclick="sendPost('uploader/srv-hello')">Check Connection</button>
+        <button class="ui-btn ui-icon-search  ui-btn-icon-left no-margin" onclick="sendPost('uploader/srv-hello')">Check Connection</button>
     </div>
     <div class="ui-block-b">
-        <button class="ui-btn ui-icon-arrow-d ui-btn-icon-left" onclick="sendPost('uploader/ssid-pass')">Get Cracked SSIDs</button>
+        <button class="ui-btn ui-icon-arrow-d ui-btn-icon-left no-margin" onclick="sendPost('uploader/ssid-pass')">Get Cracked SSIDs</button>
     </div>
     <div class="ui-block-c">
-        <button class="ui-btn ui-icon-arrow-u ui-btn-icon-left" onclick="sendPost('uploader/upload-hs')">Upload Handshakes</button>
+        <button class="ui-btn ui-icon-arrow-u ui-btn-icon-left no-margin" onclick="sendPost('uploader/upload-hs')">Upload Handshakes</button>
     </div>
 </div>
-<div>
-    Handshake path: {{hs_path}}
+<div class="ui-grid ui-grid-b marg-me">
+    <div class="ui-block-a ui-box">
+        APs on list: <b>{{ap_cnt}}</b>
+    </div>
+    <div class="ui-block-b ui-box">
+        Unsent Handshakes: <b>{{new_hs_cnt}}</b>
+    </div>
+    <div class="ui-block-c ui-box">
+        Total Handshakes: <b>{{hs_cnt}}</b>
+    </div>
 </div>
-<div>
-    Total Handshake count: {{hs_cnt}}
+<div class="ui-grid ui-grid-a">
+    <table class="ui-block-a ui-box">
+        <tr>
+            <th>Path to handshake file</th>
+        </tr>
+        {% if hs_strings|length %}
+            {% for path in hs_strings %}
+            <tr>
+                <td>{{path}}</td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td style="color: gray"> -- no entries -- </td>
+            </tr>
+        {% endif %}
+    </table>
+    <table class="ui-block-b ui-box">
+        <tr>
+            <th>BSSID</th>
+            <th>SSID</th>
+        </tr>
+        {% if ap_list.items()|length %}
+            {% for bssid,ssid in ap_list.items() %}
+            <tr>
+                <td>{{bssid}}</td>
+                <td>{{ssid}}</td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan=2 style="color: gray"> -- no entries -- </td>
+            </tr>
+        {% endif %}
+    </table>
 </div>
-<div>
-    Unsent Handshake count: {{new_hs_cnt}}
+<div class="ui-grid ui-grid-solo marg-me">
+    <div class="ui-block-a ui-box">
+        Cracked SSIDs
+    </div>
 </div>
-<div>
-    APs on list: {{ap_cnt}}
-</div>
-<div>
-    {% for path in hs_strings %}
-    <p>{{path}}</p>
-    {% endfor %}
-</div>
-<div>
-    {% for bssid,ssid in ap_list.items() %}
-    <p>{{bssid}} : {{ssid}}</p>
-    {% endfor %}
+<div class="ui-grid ui-grid-solo">
+    <table class="ui-block-a ui-box">
+        <tr>
+            <th>SSID</th>
+            <th>PASSWORD</th>
+        </tr>
+        <tr>
+            <td colspan=2 style="color: gray"> -- no entries -- </td>
+        </tr>
+    </table>
 </div>
 {% endblock %}
 
@@ -134,7 +199,6 @@ class Uploader(plugins.Plugin):
 
             return render_template_string(
                     SITE_STRING,
-                    hs_path=self.config["bettercap"]["handshakes"],
                     hs_cnt=hs_cnt,
                     hs_strings=self.new_paths,
                     new_hs_cnt=new_hs_cnt,
