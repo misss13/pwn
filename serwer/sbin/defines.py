@@ -155,7 +155,7 @@ def compute_cat_bruteforce(active_handshake):
         os.system("echo '' > ./serwer/manage/active_password_h")
         os.system("echo '' > ./serwer/manage/active_password_h1")
         os.system("hcxpcapngtool -o ./serwer/manage/actual.hc22000 -E ./serwer/manage/wordlist ./serwer/sbin/pcap/" + str(active_handshake) + ".pcap")
-        os.system("hashcat -m 22000 ./serwer/manage/actual.hc22000 -a 3 '?d' -o ./serwer/manage/active_password_h")
+        os.system("hashcat -m 22000 ./serwer/manage/actual.hc22000 -a 3 'abcdefg?d' -o ./serwer/manage/active_password_h")
         os.system("cat ./serwer/manage/active_password_h | cut -d: -f5 | head -n 1 > ./serwer/manage/active_password_h1")
         with open('./serwer/manage/active_password', 'r') as file:
             passw = file.read().rstrip()
@@ -260,7 +260,7 @@ def client_hello(socket, address):
             print("[ERROR] in status")
         
     else:
-        print("Request undefined")
+        print(f"Undefined request: {repr(r)}")
     socket.close()
 
 
