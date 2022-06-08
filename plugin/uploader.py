@@ -46,6 +46,20 @@ SITE_STRING = """
         border: 1px solid rgb(221, 221, 221);
         background-color: rgb(246, 246, 246);
     }
+    .banner {
+        width: 100%;
+        padding: 0.2rem;
+    }
+    #success {
+        background-color: green;
+        text-align: center;
+        color: white;
+    }
+    #fail {
+        background-color: red;
+        text-align: center;
+        color: white;
+    }
 </style>
 {% endblock %}
 
@@ -61,12 +75,18 @@ SITE_STRING = """
         <button class="ui-btn ui-icon-arrow-u ui-btn-icon-left no-margin" onclick="sendPost('uploader/upload-hs')">Upload Handshakes</button>
     </div>
 </div>
+<div id="success" style="display:none" class="banner">
+    Command succeeded
+</div>
+<div id="fail" style="display:none" class="banner">
+    Command failed
+</div>
 <div class="ui-grid ui-grid-b marg-me">
     <div class="ui-block-a ui-box">
-        APs on list: <b>{{ap_cnt}}</b>
+        Unsent Handshakes: <b>{{new_hs_cnt}}</b>
     </div>
     <div class="ui-block-b ui-box">
-        Unsent Handshakes: <b>{{new_hs_cnt}}</b>
+        Fully Captured Handshakes: <b>{{ap_cnt}}</b>
     </div>
     <div class="ui-block-c ui-box">
         Total Handshakes: <b>{{hs_cnt}}</b>
@@ -119,14 +139,18 @@ SITE_STRING = """
             <th>SSID</th>
             <th>PASSWORD</th>
         </tr>
-        <tr>
-            <td colspan=2 style="color: gray"> -- no entries -- </td>
-        </tr>
+        <tbody id="crack">
+            <tr>
+                <td colspan=2 style="color: gray"> -- no entries -- </td>
+            </tr>
+        </tbody>
     </table>
 </div>
 {% endblock %}
 
 {% block script %}
+var timeout = null;
+
 function sendPost(url) {
     var xobj = new XMLHttpRequest()
     var csrf = "{{ csrf_token() }}"
@@ -134,6 +158,46 @@ function sendPost(url) {
     xobj.setRequestHeader("x-csrf-token", csrf)
     xobj.onreadystatechange = function () {
         if (xobj.readyState == 4) {
+            $("#success").css("display", "none")
+            $("#fail").css("display", "none")
+            
+            if (xobj.status == 200) {
+                $("#success").css("display", "block")
+                $("#fail").css("display", "none")
+            } else {
+                $("#success").css("display", "none")
+                $("#fail").css("display", "block")
+            }
+
+            if (url == "uploader/srv-hello") {
+                console.log("Hello? Well... not much else to do")
+            }
+            else if (url == "uploader/ssid-pass") {
+                if (xobj.status == 200) {
+
+                    try {
+                        ssid_json = JSON.parse(xobj.response)
+                        $("#crack").empty()
+
+                        for (let key in ssid_json) {
+                            $("#crack").append("<tr><td>" + key + "</td><td>" + ssid_json[key] + "</td></tr>")
+                        }
+                    }
+                    catch (e) {
+                        console.error(e)
+                    }
+                }
+            }
+            else if (url == "uploader/upload-hs") {
+                
+            }
+            
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                $("#success").css("display", "none")
+                $("#fail").css("display", "none")
+            }, 3000)
+
             console.log(xobj.status)
             try {
                 console.log(JSON.parse(xobj.response))
@@ -208,7 +272,6 @@ class Uploader(plugins.Plugin):
 
         elif request.method == "POST":
             if path == "srv-hello":
-                ret_str = "DEFAULT"
                 try:
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.connect((IP, PORT))
@@ -219,12 +282,10 @@ class Uploader(plugins.Plugin):
                         reply = cs.recv(1024).decode().strip()
                         logging.info(reply)
                         cs.close()
-                        ret_str = reply
+                        return reply, 200
                 except Exception as e:
                     logging.error(e)
-                    ret_str = e
-
-                return ret_str
+                    return str(e), 500
 
             elif path == "ssid-pass":
                 try:
@@ -243,13 +304,10 @@ class Uploader(plugins.Plugin):
                         logging.info("sock closed")
                         kvp = [x.split("\t") for x in reply.split("\n")]
                         dct = {y[0]: y[1] for y in kvp}
-                        ret_str = jsonify(dct)
-
+                        return jsonify(dct), 200
                 except Exception as e:
                     logging.error(e)
-                    ret_str = str(e)
-
-                return ret_str
+                    return str(e), 500
 
 
             elif path == "upload-hs":
@@ -314,14 +372,14 @@ class Uploader(plugins.Plugin):
                     f.write('\n')
                 f.close()
 
-                return "zapisane"
+                return "zapisane", 200
 
 
             logging.info(str(request))
             logging.info(json.dumps(request))
-            return "test"
+            return "test", 418
         
-        return "bad request"
+        return "bad request", 400
 
     # called when the plugin is loaded
     def on_loaded(self):
