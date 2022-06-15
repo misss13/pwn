@@ -1,0 +1,12 @@
+certifi==2022.5.18.1
+charset-normalizer==2.0.12
+docopt==0.6.2
+hashcat==22.5.8
+idna==3.3
+pipreqs==0.4.11
+pyftpdlib==1.5.6
+pysendfile==2.0.1
+requests==2.27.1
+tqdm==4.64.0
+urllib3==1.26.9
+yarg==0.1.9
